@@ -92,7 +92,7 @@ if 'show_info_popup' not in st.session_state:
 col_logo, _ = st.columns([0.15, 0.85])
 
 with col_logo:
-    st.image("assets/logo.jpg", width=200)
+    st.image("assets/logo.jpg", width=120)
 
 
 st.title("Dashboard di Test della Qualità dell'Acqua")
@@ -129,10 +129,13 @@ if not df.empty:
     disable_sample_test = bool(selected_operators)
 
     sample_options = df[COLUMN_NAMES['sample_id']].unique().tolist()
+    # Imposta la selezione predefinita per mostrare tutti i campioni
     selected_samples = st.sidebar.multiselect("Seleziona ID Campione:", options=sample_options, disabled=disable_sample_test, default=sample_options)
     
     test_options = df[COLUMN_NAMES['test_name']].unique().tolist()
-    selected_tests = st.sidebar.multiselect("Seleziona Nomi Test:", options=test_options, disabled=disable_sample_test, default=test_options)
+    # Imposta la selezione predefinita per mostrare solo il primo test
+    default_test = [test_options[0]] if test_options else []
+    selected_tests = st.sidebar.multiselect("Seleziona Nomi Test:", options=test_options, disabled=disable_sample_test, default=default_test)
 
     # Filtro per il valore del risultato
     min_result_val = float(df[COLUMN_NAMES['result']].min())
@@ -204,11 +207,17 @@ if not df.empty:
         dynamic_title = ""
         color_column = COLUMN_NAMES['sample_id']
 
-        # Se è stato selezionato un solo campione e uno o più test
+        # Logica per il titolo dinamico e la colonna di colore
         if len(selected_samples) == 1 and selected_tests:
+            # Caso 1: Un solo campione, uno o più test
             dynamic_title = f" per il campione: {selected_samples[0]}"
             color_column = COLUMN_NAMES['test_name']
+        elif len(selected_samples) > 1 and selected_tests:
+            # Caso 2: Più campioni, uno o più test
+            dynamic_title = f" per i test: {', '.join(selected_tests)}"
+            color_column = COLUMN_NAMES['sample_id']
         elif selected_tests:
+            # Caso 3: Nessuna selezione di campioni, solo test
             dynamic_title = f" per i test: {', '.join(selected_tests)}"
         
         # --- Crea il grafico Plotly ---
