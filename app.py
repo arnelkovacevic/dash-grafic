@@ -12,9 +12,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Definisci l'URL del file predefinito
-DEFAULT_URL = "https://www.dropbox.com/scl/fi/d9jbnoe21yv7hcqgsuoo7/report_controlli_acqua.xlsx?rlkey=9nkq89ay3b9e49qcnznq0kga1&st=q75e2akm&dl=1"
-
 # Definisci i nomi delle colonne per coerenza
 COLUMN_NAMES = {
     'date_time': 'Time',
@@ -28,16 +25,20 @@ COLUMN_NAMES = {
 
 # Funzione per leggere e pulire i dati
 @st.cache_data
-def load_data(uploaded_file):
+def load_data(file_source):
     """
-    Carica e preprocessa i dati dal file caricato.
-    Usa la cache per evitare ricaricamenti inutili.
+    Carica e preprocessa i dati dal file.
+    Supporta sia un file caricato che un percorso di file locale.
     """
     try:
-        if uploaded_file.name.endswith('.csv'):
-            df = pd.read_csv(uploaded_file)
-        elif uploaded_file.name.endswith(('.xls', '.xlsx')):
-            df = pd.read_excel(uploaded_file)
+        # Controlla se il file_source è un percorso (stringa) o un file caricato (UploadedFile)
+        if isinstance(file_source, str):
+            # Percorso del file locale
+            df = pd.read_excel(file_source)
+        elif file_source.name.endswith('.csv'):
+            df = pd.read_csv(file_source)
+        elif file_source.name.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(file_source)
         else:
             st.error('Tipo di file non supportato. Carica un file .csv o .xlsx.')
             return pd.DataFrame()
@@ -49,36 +50,11 @@ def load_data(uploaded_file):
         
         return df
 
+    except FileNotFoundError:
+        st.error(f'Errore: File non trovato al percorso: {file_source}')
+        return pd.DataFrame()
     except Exception as e:
         st.error(f'Errore durante l\'elaborazione del file: {e}')
-        return pd.DataFrame()
-
-# Funzione per caricare i dati da un URL
-@st.cache_data
-def load_data_from_url(url):
-    """
-    Scarica e preprocessa i dati da un URL.
-    Usa la cache per evitare ricaricamenti inutili.
-    """
-    try:
-        response = requests.get(url, allow_redirects=True)
-        response.raise_for_status() # Lancia un errore per risposte HTTP errate
-        
-        file_content = io.BytesIO(response.content)
-        df = pd.read_excel(file_content)
-        
-        # Pulizia e preparazione dei dati
-        df[COLUMN_NAMES['date_time']] = pd.to_datetime(df[COLUMN_NAMES['date_time']], errors='coerce')
-        df = df[df[COLUMN_NAMES['date_time']].notna()]
-        df[COLUMN_NAMES['date']] = df[COLUMN_NAMES['date_time']].dt.floor('D')
-        
-        return df
-
-    except requests.exceptions.RequestException as e:
-        st.error(f'Errore durante il download del file dall\'URL: {e}')
-        return pd.DataFrame()
-    except Exception as e:
-        st.error(f'Errore durante l\'elaborazione del file scaricato: {e}')
         return pd.DataFrame()
 
 
@@ -101,15 +77,21 @@ st.title("Dashboard di Test della Qualità dell'Acqua")
 # File uploader
 uploaded_file = st.file_uploader("Trascina e rilascia o Seleziona un file", type=['csv', 'xlsx'])
 
+# Definisci il percorso del file predefinito
+LOCAL_FILE_PATH = "report_controlli_acqua.xlsx"
+
 # Logica di caricamento del file
 df = pd.DataFrame()
 if uploaded_file:
     df = load_data(uploaded_file)
 else:
-    df = load_data_from_url(DEFAULT_URL)
+    df = load_data(LOCAL_FILE_PATH)
 
 
 if not df.empty:
+    # Qui il resto del tuo codice originale per la visualizzazione e i filtri
+    # ... (Il codice rimane invariato da questo punto in poi) ...
+    
     # Crea la sidebar per i filtri
     st.sidebar.header("Filtri Dati")
 
