@@ -71,11 +71,8 @@ def to_excel(df):
 if 'show_info_popup' not in st.session_state:
     st.session_state.show_info_popup = False
 
-# Creiamo due colonne per il logo
-col_logo, _ = st.columns([0.15, 0.85])
-
-with col_logo:
-    st.image("assets/logo.jpg", width=120)
+# Posiziona il logo principale
+st.image("assets/logo.jpg", width=120)
 
 st.title("Dashboard di Test della Qualità dell'Acqua")
 
@@ -93,7 +90,8 @@ else:
     df = load_data(LOCAL_FILE_PATH)
 
 if not df.empty:
-    # --- Sidebar per i filtri con espansori ---
+    # --- Sidebar per i filtri con l'immagine in cima ---
+    st.sidebar.image("assets/avs.png", width=120)
     st.sidebar.header("Filtri Dati")
 
     # Filtro Intervallo di Date
@@ -195,10 +193,10 @@ if not df.empty:
                 dynamic_title = f" per il campione: {selected_samples[0]}"
                 color_column = COLUMN_NAMES['test_name']
             elif len(selected_samples) > 1 and selected_tests:
-                dynamic_title = f" per i test: {', '.join(selected_tests)}"
+                dynamic_title = f" per: {', '.join(selected_tests)}"
                 color_column = COLUMN_NAMES['sample_id']
             elif selected_tests:
-                dynamic_title = f" per i test: {', '.join(selected_tests)}"
+                dynamic_title = f" per: {', '.join(selected_tests)}"
             
             hover_cols = df_filtered.columns.tolist()
             
