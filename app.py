@@ -80,7 +80,7 @@ st.title("Dashboard di Test della Qualità dell'Acqua")
 uploaded_file = st.file_uploader("Trascina e rilascia o Seleziona un file", type=['csv', 'xlsx'])
 
 # Definisci il percorso del file predefinito
-LOCAL_FILE_PATH = "report_controlli_acqua.xlsx"
+LOCAL_FILE_PATH = "report.xlsx"
 
 # Logica di caricamento del file
 df = pd.DataFrame()
