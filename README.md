@@ -15,6 +15,8 @@ Installa le librerie necessarie utilizzando il file requirements.txt che abbiamo
 
 pip install -r requirements.txt
 
+
+
 Avvia l'applicazione dal terminale (nella stessa cartella in cui si trova il file dashboard.py):
 
 streamlit run dashboard.py
