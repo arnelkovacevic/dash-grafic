@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import io
 import openpyxl
+from datetime import datetime
 
 # --- Impostazioni di base della pagina ---
 st.set_page_config(
@@ -28,11 +29,8 @@ COLUMN_NAMES = {
 }
 
 # --- Mapping mesi italiani -> numero ---
-mesi_map = {
-    "Gennaio": 1, "Febbraio": 2, "Marzo": 3, "Aprile": 4,
-    "Maggio": 5, "Giugno": 6, "Luglio": 7, "Agosto": 8,
-    "Settembre": 9, "Ottobre": 10, "Novembre": 11, "Dicembre": 12
-}
+mesi_ordine = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
+               "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
 
 # --- Funzione caricamento dati ---
 @st.cache_data
@@ -82,14 +80,23 @@ if not df.empty:
             format_func=lambda x: {'bar': 'Grafico a Barre', 'line': 'Grafico a Linee'}[x]
         )
 
-    # Filtri
-    selected_months = st.sidebar.multiselect("Mese:", df[COLUMN_NAMES['mese']].unique().tolist())
-    selected_years = st.sidebar.multiselect("Anno:", df[COLUMN_NAMES['anno']].unique().tolist())
+    # --- FILTRO ANNO ---
+    anno_corrente = datetime.now().year
+    year_options = sorted(df[COLUMN_NAMES['anno']].unique().tolist())
+    default_year = [anno_corrente] if anno_corrente in year_options else [year_options[-1]]
+    selected_years = st.sidebar.multiselect("Anno:", options=year_options, default=default_year)
+
+    # --- FILTRO MESE ---
+    month_options = df[COLUMN_NAMES['mese']].unique().tolist()
+    default_months = [m for m in mesi_ordine if m in month_options]
+    selected_months = st.sidebar.multiselect("Mese:", options=month_options, default=default_months)
+
+    # --- FILTRO LAVAGGIO e Totale MC ---
     selected_lavaggio = st.sidebar.multiselect("Lavaggio:", df[COLUMN_NAMES['lavaggio']].unique().tolist())
     min_mc_val, max_mc_val = float(df[COLUMN_NAMES['totale_mc']].min()), float(df[COLUMN_NAMES['totale_mc']].max())
     mc_range = st.sidebar.slider("Totale MC:", min_mc_val, max_mc_val, [min_mc_val, max_mc_val], step=10000.0)
 
-    # Filtra dati
+    # --- FILTRO DATI ---
     df_filtered = df.copy()
     if selected_months:
         df_filtered = df_filtered[df_filtered[COLUMN_NAMES['mese']].isin(selected_months)]
@@ -99,6 +106,10 @@ if not df.empty:
         df_filtered = df_filtered[df_filtered[COLUMN_NAMES['lavaggio']].isin(selected_lavaggio)]
     df_filtered = df_filtered[(df_filtered[COLUMN_NAMES['totale_mc']] >= mc_range[0]) &
                               (df_filtered[COLUMN_NAMES['totale_mc']] <= mc_range[1])]
+
+    # Ordina mesi
+    df_filtered[COLUMN_NAMES['mese']] = pd.Categorical(df_filtered[COLUMN_NAMES['mese']], categories=mesi_ordine, ordered=True)
+    df_filtered = df_filtered.sort_values([COLUMN_NAMES['anno'], COLUMN_NAMES['mese']])
 
     if df_filtered.empty:
         st.warning("Nessun dato trovato con i filtri selezionati.")
@@ -111,40 +122,27 @@ if not df.empty:
         st.markdown("---")
         st.header("Consumo di MC per Mese")
 
+        # --- Grafico Totale MC ---
         if chart_type == 'bar':
             fig = px.bar(df_filtered, x=COLUMN_NAMES['mese'], y=COLUMN_NAMES['totale_mc'],
-                         color=df_filtered[COLUMN_NAMES['lavaggio']].astype(str),
+                         color=COLUMN_NAMES['lavaggio'],
                          title="Consumo Totale MC per Mese",
-                         labels={COLUMN_NAMES['totale_mc']: 'Totale MC', COLUMN_NAMES['mese']: 'Mese'})
-        else:  # linee
+                         labels={COLUMN_NAMES['totale_mc']: 'Totale MC',
+                                 COLUMN_NAMES['mese']: 'Mese',
+                                 COLUMN_NAMES['lavaggio']:'Lavaggi'})
+        else:
+            # Line chart solo Totale MC per mese
             df_grouped_mc = df_filtered.groupby([COLUMN_NAMES['anno'], COLUMN_NAMES['mese']])[COLUMN_NAMES['totale_mc']].sum().reset_index()
-            df_grouped_mc["Mese_Num"] = df_grouped_mc[COLUMN_NAMES['mese']].map(mesi_map)
-            df_grouped_mc = df_grouped_mc.sort_values([COLUMN_NAMES['anno'], "Mese_Num"])
+            df_grouped_mc[COLUMN_NAMES['mese']] = pd.Categorical(df_grouped_mc[COLUMN_NAMES['mese']], categories=mesi_ordine, ordered=True)
+            df_grouped_mc = df_grouped_mc.sort_values([COLUMN_NAMES['anno'], COLUMN_NAMES['mese']])
             df_grouped_mc["Mese_Label"] = df_grouped_mc[COLUMN_NAMES['mese']]
+            
             fig = px.line(df_grouped_mc, x="Mese_Label", y=COLUMN_NAMES['totale_mc'],
                           title="Consumo Totale MC per Mese",
                           labels={COLUMN_NAMES['totale_mc']:'Totale MC', "Mese_Label":"Mese"})
             fig.update_traces(mode='lines+markers')
 
         st.plotly_chart(fig, use_container_width=True)
-
-        # --- Lavaggi ---
-        if chart_type == 'bar':
-            fig_lavaggio = px.bar(df_filtered, x=COLUMN_NAMES['mese'], y=COLUMN_NAMES['lavaggio'],
-                                  color=df_filtered[COLUMN_NAMES['lavaggio']].astype(str),
-                                  title="Numero di Lavaggi per Mese",
-                                  labels={COLUMN_NAMES['lavaggio']: 'Lavaggio', COLUMN_NAMES['mese']: 'Mese'})
-        else:
-            df_grouped_lavaggio = df_filtered.groupby([COLUMN_NAMES['anno'], COLUMN_NAMES['mese']])[COLUMN_NAMES['lavaggio']].sum().reset_index()
-            df_grouped_lavaggio["Mese_Num"] = df_grouped_lavaggio[COLUMN_NAMES['mese']].map(mesi_map)
-            df_grouped_lavaggio = df_grouped_lavaggio.sort_values([COLUMN_NAMES['anno'], "Mese_Num"])
-            df_grouped_lavaggio["Mese_Label"] = df_grouped_lavaggio[COLUMN_NAMES['mese']]
-            fig_lavaggio = px.line(df_grouped_lavaggio, x="Mese_Label", y=COLUMN_NAMES['lavaggio'],
-                                   title="Numero di Lavaggi per Mese",
-                                   labels={COLUMN_NAMES['lavaggio']:'Lavaggio', "Mese_Label":"Mese"})
-            fig_lavaggio.update_traces(mode='lines+markers')
-
-        st.plotly_chart(fig_lavaggio, use_container_width=True)
 
         # --- Download ---
         with st.expander("Esporta Dati", expanded=False):
@@ -155,4 +153,4 @@ if not df.empty:
 
         st.markdown("---")
         st.header("Tabella Dati Filtrati")
-        st.dataframe(df_filtered.drop(columns='Anno-Mese', errors='ignore'))
+        st.dataframe(df_filtered)
