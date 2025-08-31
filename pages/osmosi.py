@@ -5,7 +5,6 @@ import io
 import openpyxl
 from datetime import datetime
 
-
 # --- Impostazioni di base della pagina ---
 st.set_page_config(
     page_title="Dashboard Osmosi",
@@ -159,13 +158,13 @@ if not df.empty:
         
         st.plotly_chart(fig, use_container_width=True)
 
-        # --- Grafico Totale MC annuale ---
+        # --- Grafico Totale annuale (ora dinamico) ---
         st.markdown("---")
-        st.header("Consumo Totale MC per Anno")
-        df_yearly = df_filtered.groupby(COLUMN_NAMES['anno'])[COLUMN_NAMES['totale_mc']].sum().reset_index()
-        fig_yearly = px.line(df_yearly, x=COLUMN_NAMES['anno'], y=COLUMN_NAMES['totale_mc'],
-                             title="Totale MC per Anno",
-                             labels={COLUMN_NAMES['anno']:'Anno', COLUMN_NAMES['totale_mc']:'Totale MC'})
+        st.header(f"Consumo Totale {y_axis_metric_name} per Anno")
+        df_yearly = df_filtered.groupby(COLUMN_NAMES['anno'])[y_axis_metric].sum().reset_index()
+        fig_yearly = px.line(df_yearly, x=COLUMN_NAMES['anno'], y=y_axis_metric,
+                             title=f"Totale {y_axis_metric_name} per Anno",
+                             labels={COLUMN_NAMES['anno']:'Anno', y_axis_metric:y_axis_metric_name})
         fig_yearly.update_traces(mode='lines+markers')
         st.plotly_chart(fig_yearly, use_container_width=True)
 
