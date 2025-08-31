@@ -28,13 +28,14 @@ COLUMN_NAMES = {
     'anno': 'Anno'
 }
 
-# --- Mapping mesi italiani -> numero ---
+# --- Mesi in ordine ---
 mesi_ordine = ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
                "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"]
 
 # --- Funzione caricamento dati ---
 @st.cache_data
 def load_data(file_source):
+    """Carica i dati da un file Excel e li preprocessa."""
     with st.spinner('Caricamento dati in corso...'):
         try:
             if isinstance(file_source, str):
@@ -44,11 +45,13 @@ def load_data(file_source):
             else:
                 st.error('Tipo di file non supportato. Carica un file .xlsx.')
                 return pd.DataFrame()
-            
+        
             df[COLUMN_NAMES['data_inizio']] = pd.to_datetime(df[COLUMN_NAMES['data_inizio']], errors='coerce').dt.date
             df[COLUMN_NAMES['data_fine']] = pd.to_datetime(df[COLUMN_NAMES['data_fine']], errors='coerce').dt.date
+            
             if COLUMN_NAMES['mese'] in df.columns:
                 df[COLUMN_NAMES['mese']] = df[COLUMN_NAMES['mese']].str.strip().str.capitalize()
+            
             return df
         except Exception as e:
             st.error(f'Errore durante l\'elaborazione del file: {e}')
@@ -56,6 +59,7 @@ def load_data(file_source):
 
 # --- Funzione esportazione Excel ---
 def to_excel(df):
+    """Converte un DataFrame in un file Excel in memoria."""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Dati Filtrati')
@@ -79,6 +83,17 @@ if not df.empty:
             options=['bar', 'line'],
             format_func=lambda x: {'bar': 'Grafico a Barre', 'line': 'Grafico a Linee'}[x]
         )
+
+    # Scelta della metrica
+    y_axis_metric_options = {
+        'Totale MC': COLUMN_NAMES['totale_mc'],
+        'Lavaggi': COLUMN_NAMES['lavaggio']
+    }
+    y_axis_metric_name = st.sidebar.selectbox(
+        "Seleziona la metrica da visualizzare:",
+        options=list(y_axis_metric_options.keys())
+    )
+    y_axis_metric = y_axis_metric_options[y_axis_metric_name]
 
     # --- FILTRO ANNO ---
     anno_corrente = datetime.now().year
@@ -105,7 +120,7 @@ if not df.empty:
     if selected_lavaggio:
         df_filtered = df_filtered[df_filtered[COLUMN_NAMES['lavaggio']].isin(selected_lavaggio)]
     df_filtered = df_filtered[(df_filtered[COLUMN_NAMES['totale_mc']] >= mc_range[0]) &
-                              (df_filtered[COLUMN_NAMES['totale_mc']] <= mc_range[1])]
+                             (df_filtered[COLUMN_NAMES['totale_mc']] <= mc_range[1])]
 
     # Ordina mesi
     df_filtered[COLUMN_NAMES['mese']] = pd.Categorical(df_filtered[COLUMN_NAMES['mese']], categories=mesi_ordine, ordered=True)
@@ -115,34 +130,43 @@ if not df.empty:
         st.warning("Nessun dato trovato con i filtri selezionati.")
     else:
         col_total, col_avg, col_wash = st.columns(3)
-        col_total.metric("Totale MC Consumati", f"{df_filtered[COLUMN_NAMES['totale_mc']].sum():,}")
+        col_total.metric("Totale MC Consumati", f"{df_filtered[COLUMN_NAMES['totale_mc']].sum():,.0f}")
         col_avg.metric("Media MC al Mese", f"{df_filtered[COLUMN_NAMES['totale_mc']].mean():,.2f}")
         col_wash.metric("Numero Totale di Lavaggi", df_filtered[COLUMN_NAMES['lavaggio']].sum())
 
         st.markdown("---")
-        st.header("Consumo di MC per Mese")
+        st.header(f"Consumo di {y_axis_metric_name} per Mese")
 
-        # --- Grafico Totale MC ---
+        # --- Grafico a barre o linea per mesi ---
         if chart_type == 'bar':
-            fig = px.bar(df_filtered, x=COLUMN_NAMES['mese'], y=COLUMN_NAMES['totale_mc'],
+            fig = px.bar(df_filtered, x=COLUMN_NAMES['mese'], y=y_axis_metric,
                          color=COLUMN_NAMES['lavaggio'],
-                         title="Consumo Totale MC per Mese",
-                         labels={COLUMN_NAMES['totale_mc']: 'Totale MC',
+                         title=f"Consumo Totale {y_axis_metric_name} per Mese",
+                         labels={y_axis_metric: f'{y_axis_metric_name}',
                                  COLUMN_NAMES['mese']: 'Mese',
                                  COLUMN_NAMES['lavaggio']:'Lavaggi'})
-        else:
-            # Line chart solo Totale MC per mese
-            df_grouped_mc = df_filtered.groupby([COLUMN_NAMES['anno'], COLUMN_NAMES['mese']])[COLUMN_NAMES['totale_mc']].sum().reset_index()
-            df_grouped_mc[COLUMN_NAMES['mese']] = pd.Categorical(df_grouped_mc[COLUMN_NAMES['mese']], categories=mesi_ordine, ordered=True)
-            df_grouped_mc = df_grouped_mc.sort_values([COLUMN_NAMES['anno'], COLUMN_NAMES['mese']])
-            df_grouped_mc["Mese_Label"] = df_grouped_mc[COLUMN_NAMES['mese']]
+        else: # Grafico a linee
+            df_grouped = df_filtered.groupby([COLUMN_NAMES['anno'], COLUMN_NAMES['mese']])[y_axis_metric].sum().reset_index()
+            df_grouped[COLUMN_NAMES['mese']] = pd.Categorical(df_grouped[COLUMN_NAMES['mese']], categories=mesi_ordine, ordered=True)
+            df_grouped = df_grouped.sort_values([COLUMN_NAMES['anno'], COLUMN_NAMES['mese']])
+            df_grouped["Mese_Label"] = df_grouped[COLUMN_NAMES['mese']]
             
-            fig = px.line(df_grouped_mc, x="Mese_Label", y=COLUMN_NAMES['totale_mc'],
-                          title="Consumo Totale MC per Mese",
-                          labels={COLUMN_NAMES['totale_mc']:'Totale MC', "Mese_Label":"Mese"})
+            fig = px.line(df_grouped, x="Mese_Label", y=y_axis_metric, color=COLUMN_NAMES['anno'],
+                          title=f"Consumo Totale {y_axis_metric_name} per Mese",
+                          labels={y_axis_metric: f'{y_axis_metric_name}', "Mese_Label":"Mese", COLUMN_NAMES['anno']:'Anno'})
             fig.update_traces(mode='lines+markers')
-
+        
         st.plotly_chart(fig, use_container_width=True)
+
+        # --- Grafico Totale MC annuale ---
+        st.markdown("---")
+        st.header("Consumo Totale MC per Anno")
+        df_yearly = df_filtered.groupby(COLUMN_NAMES['anno'])[COLUMN_NAMES['totale_mc']].sum().reset_index()
+        fig_yearly = px.line(df_yearly, x=COLUMN_NAMES['anno'], y=COLUMN_NAMES['totale_mc'],
+                             title="Totale MC per Anno",
+                             labels={COLUMN_NAMES['anno']:'Anno', COLUMN_NAMES['totale_mc']:'Totale MC'})
+        fig_yearly.update_traces(mode='lines+markers')
+        st.plotly_chart(fig_yearly, use_container_width=True)
 
         # --- Download ---
         with st.expander("Esporta Dati", expanded=False):
